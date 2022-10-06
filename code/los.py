@@ -12,11 +12,8 @@ from astropy.time import Time
 from astropy.coordinates import ITRS
 from osgeo.osr import SpatialReference, CoordinateTransformation
 from pyproj import Transformer
-#from astropy.coordinates import EarthLocation, AltAz, Angle
-#from astropy.units import Quantity
-#from datetime import datetime
 
-print('Compute Satellite Position in TEME and Transform to ITRS')
+print('From TLE Compute Satellite Position in TEME and Transform to ITRS')
 
 # TLE for satellite GPS BIIRM-2 (PRN 31) 
 s = '1 29486U 06042A   22277.55622356 -.00000022  00000+0  00000+0 0  9998'
@@ -33,6 +30,7 @@ teme = TEME(teme_position.with_differentials(teme_velocity),obstime=Time(jd,form
 # transform teme position to itrs geocentric coordinates
 itrs = teme.transform_to(ITRS(obstime=Time(jd,format='jd')))
 location_itrs = itrs.earth_location
+radius = 6371
 print('\tITRFyy From TEME\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value))
 
 print('\nASSUMING ITRF2000:')
@@ -65,7 +63,7 @@ epsg7931.ImportFromEPSG(7931)
 
 # define ogr transformer between 2 CRSs
 itrf2etrf = CoordinateTransformation(epsg7909, epsg7931)
-location_etrs = itrf2etrf.TransformPoint(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value)
+location_etrs = itrf2etrf.TransformPoint(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value-radius)
 print('\tETRF2000 From ITRFyy\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
 
 '''
@@ -73,7 +71,7 @@ ETRF2000 TO RD
 '''
 # define the Rijksdriehoek projection system (EPSG 28992) 
 epsg28992 = SpatialReference()
-epsg28992.ImportFromEPSG(28992)
+epsg28992.ImportFromEPSG(7415)
 
 # define ogr transformer between 2 CRSs
 etrf2rd = CoordinateTransformation(epsg7931, epsg28992)
@@ -97,7 +95,7 @@ ITRF2000 TO ETRF2000
 itrf2etrf_proj = Transformer.from_crs(7909, 7931)
 
 # transform itrf2000 to etrf2000
-location_etrs = itrf2etrf_proj.transform(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value)
+location_etrs = itrf2etrf_proj.transform(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value-radius)
 print('\tETRF2000 From ITRFyy\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
 
 
@@ -105,7 +103,7 @@ print('\tETRF2000 From ITRFyy\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0
 ETRF2000 TO RD
 '''
 # define pyproj Transformer between 2 CRSs
-etrf2rd_proj = Transformer.from_crs(7931, 28992)
+etrf2rd_proj = Transformer.from_crs(7931, 7415)
 
 # transform etrf2000 to rd
 location_rd = etrf2rd_proj.transform(location_etrs[0],location_etrs[1],location_etrs[2])
