@@ -13,6 +13,7 @@ from astropy.coordinates import ITRS
 from osgeo.osr import SpatialReference, CoordinateTransformation
 from pyproj import Transformer
 
+
 print('From TLE Compute Satellite Position in TEME and Transform to ITRS')
 
 # TLE for satellite GPS BIIRM-2 (PRN 31) 
@@ -33,8 +34,9 @@ location_itrs = itrs.earth_location
 radius = 6371
 print('\tITRFyy From TEME\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value))
 
-print('\nASSUMING ITRF2000:')
-print('\n1. TRANSFORM USING osgeo.osr')
+
+#print('\nASSUMING ITRF2000:')
+#print('\n1. TRANSFORM USING osgeo.osr')
 
 '''
 now, assume itrs realisation == itrf2000
@@ -64,7 +66,7 @@ epsg7931.ImportFromEPSG(7931)
 # define ogr transformer between 2 CRSs
 itrf2etrf = CoordinateTransformation(epsg7909, epsg7931)
 location_etrs = itrf2etrf.TransformPoint(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value-radius)
-print('\tETRF2000 From ITRFyy\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
+#print('\tETRF2000 From ITRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
 
 '''
 ETRF2000 TO RD
@@ -76,9 +78,9 @@ epsg28992.ImportFromEPSG(7415)
 # define ogr transformer between 2 CRSs
 etrf2rd = CoordinateTransformation(epsg7931, epsg28992)
 location_rd = etrf2rd.TransformPoint(location_etrs[0],location_etrs[1],location_etrs[2])
-print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_rd[0],location_rd[1],location_rd[2]))
+#print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_rd[0],location_rd[1],location_rd[2]))
 
-print('\n2. TRANSFORM USING pyproj')
+#print('\n2. TRANSFORM USING pyproj')
 
 '''
 now,
@@ -96,7 +98,7 @@ itrf2etrf_proj = Transformer.from_crs(7909, 7931)
 
 # transform itrf2000 to etrf2000
 location_etrs = itrf2etrf_proj.transform(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value-radius)
-print('\tETRF2000 From ITRFyy\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
+print('\tETRF2000 From ITRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
 
 
 '''
@@ -108,6 +110,111 @@ etrf2rd_proj = Transformer.from_crs(7931, 7415)
 # transform etrf2000 to rd
 location_rd = etrf2rd_proj.transform(location_etrs[0],location_etrs[1],location_etrs[2])
 print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_rd[0],location_rd[1],location_rd[2]))
+
+
+print('\nASSUMING ITRF2014:')
+print('\n1. TRANSFORM USING osgeo.osr')
+
+'''
+now, assume itrs realisation == itrf2014
+transform itrf2014 to itrf2000
+transform itrf2000 to etrf2000
+transform etrs2000 to bessel + project rd amersfoort
+using SpatialReference and CoordinateTransformation
+'''
+
+'''
+ITRF2014 TO ITRF2000
+'''
+# define ITRF2014 system (EPSG 7912)
+epsg7912 = SpatialReference()
+epsg7912.ImportFromEPSG(7912)
+
+# define ITRF2000 system (EPSG 7909)
+epsg7909 = SpatialReference()
+epsg7909.ImportFromEPSG(7909)
+
+# define ogr transformer between the 2 CRSs
+itrf2itrf = CoordinateTransformation(epsg7912, epsg7909)
+location_itrs_2k = itrf2itrf.TransformPoint(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value-radius)
+print('\tITRF2000 From ITRF2014\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_itrs_2k[0],location_itrs_2k[1],location_itrs_2k[2]))
+
+'''
+ITRF2000 TO ETRF2000
+'''
+# define ETRF2000 system (EPSG 7931)
+epsg7931 = SpatialReference()
+epsg7931.ImportFromEPSG(7931)
+
+# define ogr transformer between 2 CRSs
+itrf2etrf = CoordinateTransformation(epsg7909, epsg7931)
+location_etrs = itrf2etrf.TransformPoint(location_itrs_2k[0],location_itrs_2k[1],location_itrs_2k[2])
+print('\tETRF2000 From ITRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
+'''
+ETRF2000 TO RD
+'''
+# define the Rijksdriehoek projection system (EPSG 28992) 
+epsg7415 = SpatialReference()
+epsg7415.ImportFromEPSG(7415)
+
+# define ogr transformer between 2 CRSs
+etrf2rd = CoordinateTransformation(epsg7931, epsg7415)
+location_rd = etrf2rd.TransformPoint(location_etrs[0],location_etrs[1],location_etrs[2])
+print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_rd[0],location_rd[1],location_rd[2]))
+
+print('\n2. TRANSFORM USING pyproj')
+
+
+'''
+now,
+assume itrs realisation == itrf2000
+transform itrf2000 to etrs2000
+transform etrs2000 to bessel + project rd amersfoort
+using SpatialReference and CoordinateTransformation
+'''
+
+'''
+ITRF2014 TO ITRF2000
+'''
+# define pyproj Transformer between ITRF2014 & ITRF2000
+itrf2itrf_proj = Transformer.from_crs(7912, 7909)
+
+# transform 
+location_itrs_2k = itrf2itrf_proj.transform(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value-radius)
+print('\tITRF2000 From ITRF2014\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_itrs_2k[0],location_itrs_2k[1],location_itrs_2k[2]))
+
+'''
+ITRF2000 TO ETRF2000
+'''
+# define pyproj Transformer between ITRF2000 & ETRF2000
+itrf2etrf_proj = Transformer.from_crs(7909, 7931)
+
+# transform 
+location_etrs = itrf2etrf_proj.transform(location_itrs_2k[0],location_itrs_2k[1],location_itrs_2k[2])
+print('\tETRF2000 From ITRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
+
+'''
+ETRF2000 TO RD
+'''
+# define pyproj Transformer between ETRF2000 & RD
+etrf2rd_proj = Transformer.from_crs(7931, 7415)
+
+# transform 
+location_rd = etrf2rd_proj.transform(location_etrs[0],location_etrs[1],location_etrs[2])
+print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_rd[0],location_rd[1],location_rd[2]))
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -145,7 +252,7 @@ IMPORTANT TO KNOW
 '''
 IMPORTANT TO KNOW
     "The ETRS89 system is realized in several ways, and like with ITRS, realizations
-     of a sysTem are called reference frames. By virtue of the ETRS89 definition, 
+     of a system are called reference frames. By virtue of the ETRS89 definition, 
      which ties ETRS89 to ITRS at epoch 1989.0 and the Eurasian plate, for each realization
      of the ITRS (called ITRFyy), also a corresponding frame in ETRS89 can be computed.
      These frames are labelled ETRFyy. Each realization has a new set of improved positions
