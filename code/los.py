@@ -27,9 +27,7 @@ def tle_to_itrs(l1='1 29486U 06042A   22277.55622356 -.00000022  00000+0  00000+
     
     # transform teme position to itrs geocentric coordinates
     itrs = teme.transform_to(ITRS(obstime=Time(jd,format='jd')))
-    #location_itrs = itrs.earth_location
     position_itrs = (itrs.earth_location.geodetic.lon.value,itrs.earth_location.geodetic.lat.value,itrs.earth_location.geodetic.height.value-6371)
-    #print('\tITRFyy From TEME\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value))
     
     return position_itrs
 
@@ -37,6 +35,7 @@ def convert_crs(from_crs,to_crs,pos_vector):
     
     transformer =  Transformer.from_crs(from_crs,to_crs)
     position = transformer.transform(pos_vector[0],pos_vector[1],pos_vector[2])
+    
     return position
 
 def main():
