@@ -10,214 +10,66 @@ from astropy.coordinates import TEME, CartesianDifferential, CartesianRepresenta
 from astropy import units as u
 from astropy.time import Time
 from astropy.coordinates import ITRS
-from osgeo.osr import SpatialReference, CoordinateTransformation
 from pyproj import Transformer
 
 
-print('From TLE Compute Satellite Position in TEME and Transform to ITRS')
+def tle_to_itrs(l1='1 29486U 06042A   22277.55622356 -.00000022  00000+0  00000+0 0  9998',l2='2 29486  54.7051 204.9391 0104917  23.9319 143.2008  2.00572655117289',day=26,month=9,year=2022,hour=13,minute=0,second=0):
+    
+    # TLE for satellite GPS BIIRM-2 (PRN 31)
+    satellite = Satrec.twoline2rv(l1, l2)
+    jd, fr = jday(year,month,day,hour,minute,second)
+    error, teme_position, teme_velocity = satellite.sgp4(jd,fr)
+    
+    # transform teme_position vector to True Equator Mean Equinox object
+    teme_position = CartesianRepresentation(teme_position*u.km)
+    teme_velocity = CartesianDifferential(teme_velocity*u.km/u.s)
+    teme = TEME(teme_position.with_differentials(teme_velocity),obstime=Time(jd,format='jd'))
+    
+    # transform teme position to itrs geocentric coordinates
+    itrs = teme.transform_to(ITRS(obstime=Time(jd,format='jd')))
+    #location_itrs = itrs.earth_location
+    position_itrs = (itrs.earth_location.geodetic.lon.value,itrs.earth_location.geodetic.lat.value,itrs.earth_location.geodetic.height.value-6371)
+    #print('\tITRFyy From TEME\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value))
+    
+    return position_itrs
 
-# TLE for satellite GPS BIIRM-2 (PRN 31) 
-s = '1 29486U 06042A   22277.55622356 -.00000022  00000+0  00000+0 0  9998'
-t = '2 29486  54.7051 204.9391 0104917  23.9319 143.2008  2.00572655117289'
-satellite = Satrec.twoline2rv(s,t)
-jd, fr = jday(2022,9,26,13,0,0)
-error, teme_position, teme_velocity = satellite.sgp4(jd,fr)
+def convert_crs(from_crs,to_crs,pos_vector):
+    
+    transformer =  Transformer.from_crs(from_crs,to_crs)
+    position = transformer.transform(pos_vector[0],pos_vector[1],pos_vector[2])
+    return position
 
-# transform teme_position vector to True Equator Mean Equinox object
-teme_position = CartesianRepresentation(teme_position*u.km)
-teme_velocity = CartesianDifferential(teme_velocity*u.km/u.s)
-teme = TEME(teme_position.with_differentials(teme_velocity),obstime=Time(jd,format='jd'))
+def main():
+    
+    print('From TLE Compute Satellite Position in RD Amersfoort')
+    print('ASSUMING ITRF2014 FROM TEME:')
+    
+    # TLE for satellite GPS BIIRM-2 (PRN 31) 
+    s = '1 29486U 06042A   22277.55622356 -.00000022  00000+0  00000+0 0  9998'
+    t = '2 29486  54.7051 204.9391 0104917  23.9319 143.2008  2.00572655117289'
+    yr,mon,day,hr,minute,sec = 2022,9,26,13,0,0
+    
+    # get satellite position in itrf2014
+    position_itrs_2k14 = tle_to_itrs()
+    print('\tITRF2014 From TEME\n\tx: {}\n\ty: {}\n\tz: {}'.format(position_itrs_2k14[0],position_itrs_2k14[1],position_itrs_2k14[2]))
+    
+    # get satellite position in itrf2000
+    position_itrs_2k = convert_crs(7912, 7909, position_itrs_2k14)
+    print('\tITRF2000 From ITRF2014\n\tx: {}\n\ty: {}\n\tz: {}'.format(position_itrs_2k[0],position_itrs_2k[1],position_itrs_2k[2]))
+    
+    # get satellite position in etrf2000
+    position_etrs = convert_crs(7909, 7931, position_itrs_2k)
+    print('\tETRF2000 From ITRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(position_etrs[0],position_etrs[1],position_etrs[2]))
+    
+    # get satellite position in rd
+    position_rd = convert_crs(7931, 7415, position_etrs)
+    print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(position_rd[0],position_rd[1],position_rd[2]))
 
-# transform teme position to itrs geocentric coordinates
-itrs = teme.transform_to(ITRS(obstime=Time(jd,format='jd')))
-location_itrs = itrs.earth_location
-radius = 6371
-print('\tITRFyy From TEME\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value))
-
-
-#print('\nASSUMING ITRF2000:')
-#print('\n1. TRANSFORM USING osgeo.osr')
-
-'''
-now, assume itrs realisation == itrf2000
-transform itrf2000 to etrs2000
-transform etrs2000 to bessel + project rd amersfoort
-using SpatialReference and CoordinateTransformation
-'''
-
-'''
-ITRF2000 TO ETRF2000
-'''
-# define ITRF2000 system (EPSG 7909)
-epsg7909 = SpatialReference()
-epsg7909.ImportFromEPSG(7909)
-
-
-# define itrf2014 system (3D EPSG 7912)
-# itrf2014 used based on trail and error; not very engineery but no precise info on links between these different systems
-# reference made to Jochem Lesparre presentation 'STOP USING WGS84'
-#epsg7912 = SpatialReference()
-#epsg7912.ImportFromEPSG(7912)
-
-# define ETRF2000 system (EPSG 7931)
-epsg7931 = SpatialReference()
-epsg7931.ImportFromEPSG(7931)
-
-# define ogr transformer between 2 CRSs
-itrf2etrf = CoordinateTransformation(epsg7909, epsg7931)
-location_etrs = itrf2etrf.TransformPoint(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value-radius)
-#print('\tETRF2000 From ITRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
-
-'''
-ETRF2000 TO RD
-'''
-# define the Rijksdriehoek projection 3D system (EPSG 28992) 
-epsg7415 = SpatialReference()
-epsg7415.ImportFromEPSG(7415)
-
-# define ogr transformer between 2 CRSs
-etrf2rd = CoordinateTransformation(epsg7931, epsg7415)
-location_rd = etrf2rd.TransformPoint(location_etrs[0],location_etrs[1],location_etrs[2])
-#print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_rd[0],location_rd[1],location_rd[2]))
-
-#print('\n2. TRANSFORM USING pyproj')
-
-'''
-now,
-assume itrs realisation == itrf2000
-transform itrf2000 to etrs2000
-transform etrs2000 to bessel + project rd amersfoort
-using SpatialReference and CoordinateTransformation
-'''
-
-'''
-ITRF2000 TO ETRF2000
-'''
-# define pyproj Transformer between 2 CRSs
-itrf2etrf_proj = Transformer.from_crs(7909, 7931)
-
-# transform itrf2000 to etrf2000
-location_etrs = itrf2etrf_proj.transform(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value-radius)
-print('\tETRF2000 From ITRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
+if __name__ == '__main__':
+    main()
 
 
-'''
-ETRF2000 TO RD
-'''
-# define pyproj Transformer between 2 CRSs
-etrf2rd_proj = Transformer.from_crs(7931, 7415)
-
-# transform etrf2000 to rd
-location_rd = etrf2rd_proj.transform(location_etrs[0],location_etrs[1],location_etrs[2])
-print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_rd[0],location_rd[1],location_rd[2]))
-
-
-print('\nASSUMING ITRF2014:')
-print('\n1. TRANSFORM USING osgeo.osr')
-
-'''
-now, assume itrs realisation == itrf2014
-transform itrf2014 to itrf2000
-transform itrf2000 to etrf2000
-transform etrs2000 to bessel + project rd amersfoort
-using SpatialReference and CoordinateTransformation
-'''
-
-'''
-ITRF2014 TO ITRF2000
-'''
-# define ITRF2014 system (EPSG 7912)
-epsg7912 = SpatialReference()
-epsg7912.ImportFromEPSG(7912)
-
-# define ITRF2000 system (EPSG 7909)
-epsg7909 = SpatialReference()
-epsg7909.ImportFromEPSG(7909)
-
-# define ogr transformer between the 2 CRSs
-itrf2itrf = CoordinateTransformation(epsg7912, epsg7909)
-location_itrs_2k = itrf2itrf.TransformPoint(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value-radius)
-print('\tITRF2000 From ITRF2014\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_itrs_2k[0],location_itrs_2k[1],location_itrs_2k[2]))
-
-'''
-ITRF2000 TO ETRF2000
-'''
-# define ETRF2000 system (EPSG 7931)
-epsg7931 = SpatialReference()
-epsg7931.ImportFromEPSG(7931)
-
-# define ogr transformer between 2 CRSs
-itrf2etrf = CoordinateTransformation(epsg7909, epsg7931)
-location_etrs = itrf2etrf.TransformPoint(location_itrs_2k[0],location_itrs_2k[1],location_itrs_2k[2])
-print('\tETRF2000 From ITRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
-'''
-ETRF2000 TO RD
-'''
-# define the Rijksdriehoek projection system (EPSG 28992) 
-epsg7415 = SpatialReference()
-epsg7415.ImportFromEPSG(7415)
-
-# define ogr transformer between 2 CRSs
-etrf2rd = CoordinateTransformation(epsg7931, epsg7415)
-location_rd = etrf2rd.TransformPoint(location_etrs[0],location_etrs[1],location_etrs[2])
-print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_rd[0],location_rd[1],location_rd[2]))
-
-print('\n2. TRANSFORM USING pyproj')
-
-
-'''
-now,
-assume itrs realisation == itrf2000
-transform itrf2000 to etrs2000
-transform etrs2000 to bessel + project rd amersfoort
-using SpatialReference and CoordinateTransformation
-'''
-
-'''
-ITRF2014 TO ITRF2000
-'''
-# define pyproj Transformer between ITRF2014 & ITRF2000
-itrf2itrf_proj = Transformer.from_crs(7912, 7909)
-
-# transform 
-location_itrs_2k = itrf2itrf_proj.transform(location_itrs.geodetic.lon.value,location_itrs.geodetic.lat.value,location_itrs.geodetic.height.value-radius)
-print('\tITRF2000 From ITRF2014\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_itrs_2k[0],location_itrs_2k[1],location_itrs_2k[2]))
-
-'''
-ITRF2000 TO ETRF2000
-'''
-# define pyproj Transformer between ITRF2000 & ETRF2000
-itrf2etrf_proj = Transformer.from_crs(7909, 7931)
-
-# transform 
-location_etrs = itrf2etrf_proj.transform(location_itrs_2k[0],location_itrs_2k[1],location_itrs_2k[2])
-print('\tETRF2000 From ITRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_etrs[0],location_etrs[1],location_etrs[2]))
-
-'''
-ETRF2000 TO RD
-'''
-# define pyproj Transformer between ETRF2000 & RD
-etrf2rd_proj = Transformer.from_crs(7931, 7415)
-
-# transform 
-location_rd = etrf2rd_proj.transform(location_etrs[0],location_etrs[1],location_etrs[2])
-print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_rd[0],location_rd[1],location_rd[2]))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    
 '''
 IMPORTANT TO KNOW:
     " Newer realizations of WGS84 are coincident with International Terrestrial
