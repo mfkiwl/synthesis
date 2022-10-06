@@ -71,12 +71,12 @@ location_etrs = itrf2etrf.TransformPoint(location_itrs.geodetic.lon.value,locati
 '''
 ETRF2000 TO RD
 '''
-# define the Rijksdriehoek projection system (EPSG 28992) 
-epsg28992 = SpatialReference()
-epsg28992.ImportFromEPSG(7415)
+# define the Rijksdriehoek projection 3D system (EPSG 28992) 
+epsg7415 = SpatialReference()
+epsg7415.ImportFromEPSG(7415)
 
 # define ogr transformer between 2 CRSs
-etrf2rd = CoordinateTransformation(epsg7931, epsg28992)
+etrf2rd = CoordinateTransformation(epsg7931, epsg7415)
 location_rd = etrf2rd.TransformPoint(location_etrs[0],location_etrs[1],location_etrs[2])
 #print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(location_rd[0],location_rd[1],location_rd[2]))
 
