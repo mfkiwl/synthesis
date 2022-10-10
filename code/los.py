@@ -15,7 +15,7 @@ from tle import tle_json
 import datetime
 import json
 
-def tle_to_itrs(l1='1 29486U 06042A   22277.55622356 -.00000022  00000+0  00000+0 0  9998',l2='2 29486  54.7051 204.9391 0104917  23.9319 143.2008  2.00572655117289',day=26,month=9,year=2022,hour=13,minute=0,second=0):
+def tle_to_itrs(l1='1 29486U 06042A   22277.55622356 -.00000022  00000+0  00000+0 0  9998',l2='2 29486  54.7051 204.9391 0104917  23.9319 143.2008  2.00572655117289',day=20,month=9,year=2022,hour=13,minute=0,second=0):
     
     # TLE for satellite GPS BIIRM-2 (PRN 31)
     satellite = Satrec.twoline2rv(l1, l2)
@@ -35,18 +35,18 @@ def tle_to_itrs(l1='1 29486U 06042A   22277.55622356 -.00000022  00000+0  00000+
 
 def convert_crs(from_crs,to_crs,pos_vector):
     
-    transformer =  Transformer.from_crs(from_crs,to_crs)
+    transformer =  Transformer.from_crs(from_crs,to_crs,True)
     position = transformer.transform(pos_vector[0],pos_vector[1],pos_vector[2])
     
     return position
 
 def main():
     
-    gps_url = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=GPS-OPS&FORMAT=TLE'
-    gps_path = 'gps.txt'
-    galileo_url = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=galileo&FORMAT=TLE'
-    galileo_path = 'galileo.txt'
-    gps = tle_json(gps_path,gps_url)
+    #gps_url = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=GPS-OPS&FORMAT=TLE'
+    gps_path = '../data/gps.txt'
+    #galileo_url = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=galileo&FORMAT=TLE'
+    galileo_path = '../data/galileo.txt'
+    gps = tle_json(gps_path)
     
     print('From TLE Compute Satellite Position in RD Amersfoort')
     print('ASSUMING ITRF2014 FROM TEME:')
@@ -58,12 +58,12 @@ def main():
         # TLE for satellite GPS BIIRM-2 (PRN 31) 
         s = two_lines[0][0]
         t = two_lines[0][1]
-        yr,mon,day,hr,minute,sec = 2022,9,26,13,0,0
+        yr,mon,day,hr,minute,sec = 2022,9,20,13,0,0
     
         
         # get satellite position in itrf2014
         position_itrs_2k14 = tle_to_itrs(s,t)
-        print('\tITRF2014 From TEME\n\tx: {}\n\ty: {}\n\tz: {}'.format(position_itrs_2k14[0],position_itrs_2k14[1],position_itrs_2k14[2]))
+        print('\tITRF2000 From TEME\n\tx: {}\n\ty: {}\n\tz: {}'.format(position_itrs_2k14[0],position_itrs_2k14[1],position_itrs_2k14[2]))
         
         # get satellite position in itrf2000
         position_itrs_2k = convert_crs(7912, 7909, position_itrs_2k14)
@@ -74,7 +74,7 @@ def main():
         print('\tETRF2000 From ITRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(position_etrs[0],position_etrs[1],position_etrs[2]))
         
         # get satellite position in rd
-        position_rd = convert_crs(7931, 7415, position_etrs)
+        position_rd = convert_crs(7931,  25832, position_etrs)
         print('\tRD From ETRF2000\n\tx: {}\n\ty: {}\n\tz: {}'.format(position_rd[0],position_rd[1],position_rd[2]))
 
 
