@@ -69,10 +69,11 @@ def sat_pos():
             position_de = convert_crs(7931,  25832, position_etrs)
             
             tle[key].append(position_de)
-    
+    print(satellites)
     return satellites
 
-
+if __name__ == "__main__":
+    sat_pos()
 
 
 
