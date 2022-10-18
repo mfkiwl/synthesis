@@ -42,11 +42,12 @@ def create_grid(input_mesh, cellsize_grid):
             list_pts.append([int(x), int(y)])
 
     #extents: upper x, upper y, lower x, lower y
-    ux = 0
-    uy = 0
-    lx = 0
-    ly = 0
+    ux = 418667
+    uy = 5653653
+    lx = 418173
+    ly = 5653322
 
+    """
     print('length of list_pts_prep = ', len(list_pts_prep))
     for a in range(len(list_pts_prep)):
         if a == 0:
@@ -63,6 +64,7 @@ def create_grid(input_mesh, cellsize_grid):
                 lx = list_pts[a][0]
             if list_pts[a][1] < ly:
                 ly = list_pts[a][1]
+    """
 
     print('ux is', ux)
     print('uy is', uy)
@@ -84,7 +86,17 @@ def create_grid(input_mesh, cellsize_grid):
 
     array_centerpoints = np.array(centerpoints)
 
-    return ncols, nrows, lx, ly, array_centerpoints
+    return ncols, nrows, lx, ly, centerpoints
+
+def read_height_model(height_model_file):
+    coordinates = {}
+    xyz = open(height_model_file)
+
+    for line in xyz:
+        x, y, z = line.split()
+        coordinates[int(float(x)),int(float(y))] = float(z)
+    xyz.close()
+    return coordinates
 
 def write_raster(ncols, nrows, lx, ly, cellsize_grid, nested_satellite_values, file):
     with open(file, 'w+') as fh:
@@ -94,7 +106,7 @@ def write_raster(ncols, nrows, lx, ly, cellsize_grid, nested_satellite_values, f
         fh.write('YLLCORNER ' + str(ly) + '\n')
         fh.write('CELLSIZE ' + str(cellsize_grid) + '\n')
         fh.write('NODATA_VALUE -9999')
-        for i in reversed(nested_satellite_values):
+        for i in nested_satellite_values:
             fh.write("\n")
             for point in i:
                 fh.write(str(point) + " ")
@@ -111,31 +123,30 @@ def test(mesh,x,y,z):
         return False
 
 def main():
-    #define input file
+    #define input files
     input_file = 'LoD2_32_418_5653_1_NW.obj'
+    height_model = 'dgm1_32_418_5653_1_nw.xyz'
     #define output file
     output_file = 'out.asc'
     #define cell size for grid
-    cellsize_grid = 1
+    cellsize_grid = 2
 
     mesh = create_triangle_mesh(input_file)
     visualize(mesh)
     ncols, nrows, lx, ly, array_centerpoints = create_grid(mesh, cellsize_grid)
 
+    list_xyz = read_height_model(height_model)
+
+    array_centerpoints_z = []
+    for [x,y] in array_centerpoints:
+        array_centerpoints_z.append([x,y,list_xyz[int(x),int(y)]])
+
     list_satellite_values = []
     for i in range(len(array_centerpoints)):
-        list_satellite_values.append(1)
-
-    i = 0
-    for [x,y] in array_centerpoints:
-        #if test(mesh,x,y,352) == True:
-         #   list_satellite_values[i] = -9999
-        i += 1
-
-
+        list_satellite_values.append(array_centerpoints_z[i][2])
 
     nested_satellite_values = []
-    for i in range(0, len(list_satellite_values), (ncols)):
+    for i in range(0, len(list_satellite_values), (nrows)):
         nested_satellite_values.append(list_satellite_values[i:i + (ncols)])
 
 
