@@ -1,6 +1,12 @@
 import numpy as np
 import open3d as o3d
 import math
+import sympy
+from sympy import Point3D
+from sympy.abc import L
+from sympy.geometry import Line3D, Segment3D
+from los import sat_pos, convert_crs, tle_to_itrs
+from tle import tle_json
 
 def create_triangle_mesh(input_file):
     #Read triangle mesh from obj file
@@ -42,10 +48,10 @@ def create_grid(input_mesh, cellsize_grid):
             list_pts.append([int(x), int(y)])
 
     #extents: upper x, upper y, lower x, lower y
-    ux = 418667
-    uy = 5653653
-    lx = 418173
-    ly = 5653322
+    ux = 418676
+    uy = 5653691
+    lx = 418267
+    ly = 5653400
 
     """
     print('length of list_pts_prep = ', len(list_pts_prep))
@@ -80,8 +86,8 @@ def create_grid(input_mesh, cellsize_grid):
     first_cp_y = ly + 0.5 * cellsize_grid
     first_cp_x = lx + 0.5 * cellsize_grid
 
-    for i in range(1, nrows + 1):  # for 1 tot 125
-        for j in range(1, ncols + 1):  # for 1 tot 125
+    for j in range(1, nrows + 1):
+        for i in range(1, ncols + 1):
             centerpoints.append([i * cellsize_grid + first_cp_x, j * cellsize_grid + first_cp_y])
 
     array_centerpoints = np.array(centerpoints)
@@ -93,7 +99,7 @@ def read_height_model(height_model_file):
     xyz = open(height_model_file)
 
     for line in xyz:
-        x, y, z = line.split()
+        x,y,z = line.split()
         coordinates[int(float(x)),int(float(y))] = float(z)
     xyz.close()
     return coordinates
@@ -106,21 +112,39 @@ def write_raster(ncols, nrows, lx, ly, cellsize_grid, nested_satellite_values, f
         fh.write('YLLCORNER ' + str(ly) + '\n')
         fh.write('CELLSIZE ' + str(cellsize_grid) + '\n')
         fh.write('NODATA_VALUE -9999')
-        for i in nested_satellite_values:
+        for i in reversed(nested_satellite_values):
             fh.write("\n")
             for point in i:
                 fh.write(str(point) + " ")
 
     print('File written to', file)
 
-def test(mesh,x,y,z):
-    new_mesh = o3d.geometry.TriangleMesh()
-    array = np.array(x,y,z)
-    new_mesh.vertices = o3d.utility.Vector3dVector(array)
-    if mesh.is_intersecting(new_mesh) == True:
-        return True
-    else:
-        return False
+
+def satellite_lines(xyz):
+    satellites = sat_pos()
+    GPS = []
+    Galileo = []
+    i = 0
+    for constellation in satellites:
+        for satellite in constellation:
+            values = list(satellite.values())
+            if i == 0:
+                GPS.append(values[0][2])
+            if i == 1:
+                Galileo.append(values[0][2])
+        i += 1
+    print(GPS)
+    print(Galileo)
+
+    test_point = Point3D(418152.00, 5653486.00, 340.56)
+    lines = []
+    for satellite in Galileo:
+        line = Line3D(test_point, Point3D(satellite[0], satellite[1], satellite[2]))
+        lines.append(line)
+        print(line.equation())
+    print(lines)
+    return lines
+
 
 def main():
     #define input files
@@ -137,20 +161,23 @@ def main():
 
     list_xyz = read_height_model(height_model)
 
-    array_centerpoints_z = []
+    list_centerpoints_z = []
     for [x,y] in array_centerpoints:
-        array_centerpoints_z.append([x,y,list_xyz[int(x),int(y)]])
+        list_centerpoints_z.append([x,y,list_xyz[int(x),int(y)]])
 
-    list_satellite_values = []
+    list_z_values = []
     for i in range(len(array_centerpoints)):
-        list_satellite_values.append(array_centerpoints_z[i][2])
+        list_z_values.append(list_centerpoints_z[i][2])
 
-    nested_satellite_values = []
-    for i in range(0, len(list_satellite_values), (nrows)):
-        nested_satellite_values.append(list_satellite_values[i:i + (ncols)])
+    nested_z_values = []
+    for i in range(0, len(list_z_values), (ncols)):
+        nested_z_values.append(list_z_values[i:(i+ncols)])
+
+    lines = satellite_lines(list_centerpoints_z)
 
 
-    write_raster(ncols, nrows, lx, ly, cellsize_grid, nested_satellite_values, output_file)
+
+    write_raster(ncols, nrows, lx, ly, cellsize_grid, nested_z_values, output_file)
 
 
 
