@@ -4,7 +4,8 @@ import math
 import sympy
 from sympy import Point3D
 from sympy.abc import L
-from sympy.geometry import Line3D, Segment3D
+from sympy.geometry import Line3D, Segment3D, Plane, Polygon
+
 from los import sat_pos, convert_crs, tle_to_itrs
 from tle import tle_json
 
@@ -18,7 +19,6 @@ def create_triangle_mesh(input_file):
     print(np.asarray(mesh.vertices))
     print('Triangles:')
     print(np.asarray(mesh.triangles))
-    print(type(mesh.vertices))
 
     return mesh
 
@@ -136,14 +136,73 @@ def satellite_lines(xyz):
     print(GPS)
     print(Galileo)
 
-    test_point = Point3D(418152.00, 5653486.00, 340.56)
+    test_point = [418494.00, 5653466.00, 350.53]
     lines = []
     for satellite in Galileo:
-        line = Line3D(test_point, Point3D(satellite[0], satellite[1], satellite[2]))
+        line = [test_point, [satellite[0], satellite[1], satellite[2]]]
         lines.append(line)
-        print(line.equation())
-    print(lines)
     return lines
+'''
+    test_point = Point3D(418152.00, 5653486.00, 340.56)
+    lines = []
+    lines_equations = []
+    for satellite in Galileo:
+        line = (test_point, Point3D(satellite[0], satellite[1], satellite[2]))
+        lines.append(line)
+        lines_equations.append(line.equation())
+    print(lines_equations)
+
+    test_point2 = [418152.00, 5653486.00, 340.56]
+    points2 = []
+    points2.append(test_point2)
+    lines2 = []
+    i = 1
+    for satellite in Galileo:
+        points2.append([satellite[0], satellite[1], satellite[2]])
+        lines2.append([0,i])
+        i+=1
+
+    line_set = o3d.geometry.LineSet(
+        points=o3d.utility.Vector3dVector(points2),
+        lines=o3d.utility.Vector2iVector(lines2),
+    )
+    print(line_set)
+'''
+
+def mesh_to_triangles(mesh):
+    list_vertices = []
+    for i in mesh.vertices:
+        list_vertices.append(i.tolist())
+    triangles = []
+    for triangle in mesh.triangles:
+        point_1 = list_vertices[int(triangle[0])]
+        point_2 = list_vertices[int(triangle[1])]
+        point_3 = list_vertices[int(triangle[2])]
+        triangles.append([point_1, point_2, point_3])
+
+    return triangles
+
+def sign_of_volume(a,b,c,d):
+    B = np.array([b[0] - a[0], b[1] - a[1], b[2] - a[1]])
+    C = np.array([c[0] - a[0], c[1] - a[1], c[2] - a[1]])
+    D = np.array([d[0] - a[0], d[1] - a[1], d[2] - a[1]])
+    return np.sign((1.0 / 6.0) * np.dot(np.cross(B, C), D))
+
+def test(line, triangles):
+    intersections = []
+    q1 = line[0]
+    q2 = line[1]
+    for i in triangles:
+        p1 = i[0]
+        p2 = i[1]
+        p3 = i[2]
+
+        if (sign_of_volume(q1,p1,p2,p3) == sign_of_volume(q2,p1,p2,p3)) & (sign_of_volume(q1,q2,p1,p2) == sign_of_volume(q1,q2,p2,p3) == sign_of_volume(q1,q2,p3,p1)):
+            return True
+        else:
+            continue
+
+
 
 
 def main():
@@ -174,7 +233,13 @@ def main():
         nested_z_values.append(list_z_values[i:(i+ncols)])
 
     lines = satellite_lines(list_centerpoints_z)
+    triangles = mesh_to_triangles(mesh)
 
+    for line in lines:
+        if test(line, triangles) == True:
+            print("this line has an intersection with the mesh")
+        else:
+            print("this line does not have intersections with the mesh")
 
 
     write_raster(ncols, nrows, lx, ly, cellsize_grid, nested_z_values, output_file)
