@@ -48,10 +48,10 @@ def create_grid(input_mesh, cellsize_grid):
             list_pts.append([int(x), int(y)])
 
     #extents: upper x, upper y, lower x, lower y
-    ux = 418676
-    uy = 5653691
-    lx = 418267
-    ly = 5653400
+    ux = 418546
+    uy = 5653507
+    lx = 418454
+    ly = 5653441
 
     """
     print('length of list_pts_prep = ', len(list_pts_prep))
@@ -133,41 +133,13 @@ def satellite_lines(xyz):
             if i == 1:
                 Galileo.append(values[0][2])
         i += 1
-    print(GPS)
-    print(Galileo)
 
-    test_point = [418494.00, 5653466.00, 350.53]
     lines = []
     for satellite in Galileo:
-        line = [test_point, [satellite[0], satellite[1], satellite[2]]]
+        line = [xyz, [satellite[0], satellite[1], satellite[2]]]
         lines.append(line)
     return lines
-'''
-    test_point = Point3D(418152.00, 5653486.00, 340.56)
-    lines = []
-    lines_equations = []
-    for satellite in Galileo:
-        line = (test_point, Point3D(satellite[0], satellite[1], satellite[2]))
-        lines.append(line)
-        lines_equations.append(line.equation())
-    print(lines_equations)
 
-    test_point2 = [418152.00, 5653486.00, 340.56]
-    points2 = []
-    points2.append(test_point2)
-    lines2 = []
-    i = 1
-    for satellite in Galileo:
-        points2.append([satellite[0], satellite[1], satellite[2]])
-        lines2.append([0,i])
-        i+=1
-
-    line_set = o3d.geometry.LineSet(
-        points=o3d.utility.Vector3dVector(points2),
-        lines=o3d.utility.Vector2iVector(lines2),
-    )
-    print(line_set)
-'''
 
 def mesh_to_triangles(mesh):
     list_vertices = []
@@ -182,10 +154,11 @@ def mesh_to_triangles(mesh):
 
     return triangles
 
+
 def sign_of_volume(a,b,c,d):
-    B = np.array([b[0] - a[0], b[1] - a[1], b[2] - a[1]])
-    C = np.array([c[0] - a[0], c[1] - a[1], c[2] - a[1]])
-    D = np.array([d[0] - a[0], d[1] - a[1], d[2] - a[1]])
+    B = np.array([b[0] - a[0], b[1] - a[1], b[2] - a[2]])
+    C = np.array([c[0] - a[0], c[1] - a[1], c[2] - a[2]])
+    D = np.array([d[0] - a[0], d[1] - a[1], d[2] - a[2]])
     return np.sign((1.0 / 6.0) * np.dot(np.cross(B, C), D))
 
 def test(line, triangles):
@@ -196,13 +169,10 @@ def test(line, triangles):
         p1 = i[0]
         p2 = i[1]
         p3 = i[2]
-
         if (sign_of_volume(q1,p1,p2,p3) == sign_of_volume(q2,p1,p2,p3)) & (sign_of_volume(q1,q2,p1,p2) == sign_of_volume(q1,q2,p2,p3) == sign_of_volume(q1,q2,p3,p1)):
             return True
         else:
             continue
-
-
 
 
 def main():
@@ -232,17 +202,28 @@ def main():
     for i in range(0, len(list_z_values), (ncols)):
         nested_z_values.append(list_z_values[i:(i+ncols)])
 
-    lines = satellite_lines(list_centerpoints_z)
     triangles = mesh_to_triangles(mesh)
 
-    for line in lines:
-        if test(line, triangles) == True:
-            print("this line has an intersection with the mesh")
-        else:
-            print("this line does not have intersections with the mesh")
+    visible_list = []
+    for point in list_centerpoints_z:
+        lines = satellite_lines(point)
+        visible = []
+        i = 0
+        for line in lines:
+            if test(line, triangles) == True:
+                print("this line has an intersection with the mesh")
+            else:
+                print("this line does not have intersections with the mesh")
+                i += 1
+        print("number of visible satellites = ", i)
+        visible_list.append(i)
 
+    print("visible list:", visible_list)
+    nested_visible_list = []
+    for i in range(0, len(nested_visible_list), (ncols)):
+        nested_visible_list.append(nested_visible_list[i:(i + ncols)])
 
-    write_raster(ncols, nrows, lx, ly, cellsize_grid, nested_z_values, output_file)
+    write_raster(ncols, nrows, lx, ly, cellsize_grid, nested_visible_list, output_file)
 
 
 
