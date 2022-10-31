@@ -48,10 +48,10 @@ def create_grid(input_mesh, cellsize_grid):
             list_pts.append([int(x), int(y)])
 
     #extents: upper x, upper y, lower x, lower y
-    ux = 418546
-    uy = 5653507
-    lx = 418454
-    ly = 5653441
+    ux = 418539
+    uy = 5653512
+    lx = 418448
+    ly = 5653423
 
     """
     print('length of list_pts_prep = ', len(list_pts_prep))
@@ -151,7 +151,12 @@ def mesh_to_triangles(mesh):
         point_2 = list_vertices[int(triangle[1])]
         point_3 = list_vertices[int(triangle[2])]
         triangles.append([point_1, point_2, point_3])
-
+    v1 = [418444, 5653431, 300]
+    v2 = [418556, 5653517, 300]
+    v3 = [418556, 5653431, 300]
+    v4 = [418444, 5653517, 300]
+    triangles.append([v1, v2, v4])
+    triangles.append([v1, v3, v2])
     return triangles
 
 
@@ -183,6 +188,8 @@ def main():
     output_file = 'out.asc'
     #define cell size for grid
     cellsize_grid = 2
+    #define test point
+    point = [418521.00, 5653473.00, 346.42]
 
     mesh = create_triangle_mesh(input_file)
     visualize(mesh)
@@ -205,23 +212,23 @@ def main():
     triangles = mesh_to_triangles(mesh)
 
     visible_list = []
-    for point in list_centerpoints_z:
-        lines = satellite_lines(point)
-        visible = []
-        i = 0
-        for line in lines:
-            if test(line, triangles) == True:
-                print("this line has an intersection with the mesh")
-            else:
-                print("this line does not have intersections with the mesh")
-                i += 1
-        print("number of visible satellites = ", i)
-        visible_list.append(i)
+
+    lines = satellite_lines(point)
+    visible = []
+    i = 0
+    for line in lines:
+        if test(line, triangles) == True:
+            print("this line is blocked")
+        else:
+            print("this line is not blocked")
+            i += 1
+    print("number of visible satellites = ", i)
+    visible_list.append(i)
 
     print("visible list:", visible_list)
     nested_visible_list = []
-    for i in range(0, len(nested_visible_list), (ncols)):
-        nested_visible_list.append(nested_visible_list[i:(i + ncols)])
+    for i in range(0, len(visible_list), (ncols)):
+        nested_visible_list.append(visible_list[i:(i + ncols)])
 
     write_raster(ncols, nrows, lx, ly, cellsize_grid, nested_visible_list, output_file)
 
