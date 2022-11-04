@@ -1,20 +1,20 @@
 """
 Created on Tue Oct  4 08:14:59 2022
 
-@author: 3Q
+@author: TM
 """
-
+import os
 from sgp4.api import Satrec
 from sgp4.api import jday
 from astropy.coordinates import TEME, CartesianDifferential, CartesianRepresentation
 from astropy import units as u
 from astropy.time import Time
-from astropy.coordinates import ITRS
+from astropy.coordinates import ITRS,EarthLocation
 from pyproj import Transformer
 from tle import tle_json
 
 
-def tle_to_itrs(l1,l2,day=20,month=9,year=2022,hour=12,minute=30,second=0):
+def tle_to_itrs(l1,l2,day=20,month=9,year=2022,hour=15,minute=0,second=0):
     
     satellite = Satrec.twoline2rv(l1, l2)
     jd, fr = jday(year,month,day,hour,minute,second)
@@ -24,22 +24,39 @@ def tle_to_itrs(l1,l2,day=20,month=9,year=2022,hour=12,minute=30,second=0):
     teme_position = CartesianRepresentation(teme_position*u.km)
     teme_velocity = CartesianDifferential(teme_velocity*u.km/u.s)
     teme = TEME(teme_position.with_differentials(teme_velocity),obstime=Time(jd,format='jd'))
+    #print(teme)
     
     # transform teme object to itrs geocentric coordinates
     itrs = teme.transform_to(ITRS(obstime=Time(jd,format='jd')))
-    position_itrs = (itrs.earth_location.geodetic.lon.value,itrs.earth_location.geodetic.lat.value,itrs.earth_location.geodetic.height.value)
-    
-    return position_itrs
+    pos = [itrs.earth_location.geocentric[0].value*1000,itrs.earth_location.geocentric[1].value*1000,itrs.earth_location.geocentric[2].value*1000]
+    #print(pos)
+    #position_itrs = (itrs.earth_location.geodetic.lon.value,itrs.earth_location.geodetic.lat.value,itrs.earth_location.geodetic.height.value*1000)
+    #print(itrs.earth_location.geodetic.lon)
+    return pos#position_itrs
 
 def convert_crs(from_crs,to_crs,pos_vector):
     
     transformer =  Transformer.from_crs(from_crs,to_crs,True)
     position = transformer.transform(pos_vector[0],pos_vector[1],pos_vector[2])
+    return position
+
+
+
+
+
+def german3d(pos_vector):
     
+    transformer = Transformer.from_pipeline('''+proj=pipeline
+                                               +step +proj=axisswap +order=2,1
+                                               +step +proj=unitconvert +xy_in=deg +z_in=m +xy_out=rad +z_out=m
+                                               +step +proj=utm +zone=32 +ellps=GRS80''')
+    position = transformer.transform(pos_vector[0],pos_vector[1],pos_vector[2])
+    #print(position)
     return position
 
 def sat_pos():
     
+    print(os.getcwd())
     gps_path = '../data/gps.txt'
     galileo_path = '../data/galileo.txt'
     print('Reading TLE')
@@ -58,23 +75,52 @@ def sat_pos():
         
             # get satellite position in itrf2014
             position_itrs_2k14 = tle_to_itrs(s,t)
+            print('ITRF2014:\t{}'.format(position_itrs_2k14))
             
             # get satellite position in itrf2000
-            position_itrs_2k = convert_crs(7912, 7909, position_itrs_2k14)
+            #position_itrs_2k = convert_crs(7789,7909,position_itrs_2k14)
+            position_itrs_2k = convert_crs(7789,4919, position_itrs_2k14)
+            print('ITRF2000:\t{}'.format(position_itrs_2k))
             
             # get satellite position in etrf2000
-            position_etrs = convert_crs(7909, 7931, position_itrs_2k)
+            position_etrs = convert_crs(4919,7930, position_itrs_2k)
+            print('ETRF2000:\t{}'.format(position_etrs))
+
+            # convert to 3d crs
+            position_de = convert_crs(7930,32632,position_etrs)
+            print('ETRS89/UTM32:\t{}'.format(position_de))
             
-            # get satellite position in rd
-            position_de = convert_crs(7931,  25832, position_etrs)
+            tle[key].append(position_etrs)
+    
+    idx = 1
+    
+    point = convert_crs(32632,7930,[418521.00, 5653473.00, 346.42])
+    #point = convert_crs(4979,4919,wgs84) 
+    '''
+    with open('../data/sat.txt','w') as sat:
+        sat.write('id|wkt\n')
+        for i in satellites[1]:
+            v = [(i[list(i.keys())[0]][2][0] - p[0])*0.2, (i[list(i.keys())[0]][2][1] - p[1])*0.2, (i[list(i.keys())[0]][2][2] - p[2])]
+            sat.write('{}|LINESTRING(418521.00 5653473.00 346.42,{} {} {})\n'.format(idx,v[0],v[1],v[2]))
+            idx += 1
+    '''
+    
+    
+    with open('../data/sat.obj','w') as lines:
+        for i in satellites[1]:
+            v = [(i[list(i.keys())[0]][2][0]-point[0]), (i[list(i.keys())[0]][2][1]-point[1]), (i[list(i.keys())[0]][2][2]-point[2])]
+            #print(v)
+            lines.write('v {} {} {}\n'.format(round(v[0],2),round(v[1],2),round(v[2],2)))
+        lines.write('v {} {} {}\n'.format(point[0],point[1],point[2]))
+        for i in range(1,29):
+            lines.write('l 29 {}\n'.format(i))
+    
             
-            tle[key].append(position_de)
-    print(satellites)
+            
     return satellites
 
 if __name__ == "__main__":
     sat_pos()
-
 
 
     
@@ -131,7 +177,7 @@ IMPORTANT TO KNOW
 '''
 IMPORTANT TO KNOW
     "The Dutch network RTK services are certified by the Dutch Kadaster and thus 
-     provide a national realizationof ETRS89 linked to the ETRF2000 reference frame."
+     provide a national realization of ETRS89 linked to the ETRF2000 reference frame."
      (van der Marel,2020,p67)
 '''
 

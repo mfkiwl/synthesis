@@ -1,24 +1,28 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Oct 31 12:13:07 2022
+
+@author: TM
+"""
+import os
 import numpy as np
 import open3d as o3d
 import math
-import sympy
-from sympy import Point3D
-from sympy.abc import L
-from sympy.geometry import Line3D, Segment3D, Plane, Polygon
+from los import sat_pos,convert_crs
+import pandas as pd
+from pyproj import Transformer
 
-from los import sat_pos, convert_crs, tle_to_itrs
-from tle import tle_json
 
 def create_triangle_mesh(input_file):
     #Read triangle mesh from obj file
     mesh = o3d.io.read_triangle_mesh(input_file,True)
 
     #Print information on triangle mesh
-    print(mesh)
-    print('Vertices:')
-    print(np.asarray(mesh.vertices))
-    print('Triangles:')
-    print(np.asarray(mesh.triangles))
+   # print(mesh)
+    #print('Vertices:')
+    #print(np.asarray(mesh.vertices))
+    #print('Triangles:')
+    #print(np.asarray(mesh.triangles))
 
     return mesh
 
@@ -124,20 +128,23 @@ def satellite_lines(xyz):
     satellites = sat_pos()
     GPS = []
     Galileo = []
+    #print(satellites)
     i = 0
     for constellation in satellites:
         for satellite in constellation:
+            sat_name = list(satellite.keys())[0]
             values = list(satellite.values())
             if i == 0:
-                GPS.append(values[0][2])
+                GPS.append([values[0][2],sat_name])
             if i == 1:
-                Galileo.append(values[0][2])
+                Galileo.append([values[0][2],sat_name])
         i += 1
-
+    
+    
     lines = []
     for satellite in Galileo:
-        line = [xyz, [satellite[0], satellite[1], satellite[2]]]
-        lines.append(line)
+        satellite.append(xyz)
+        lines.append(satellite)
     return lines
 
 
@@ -157,7 +164,53 @@ def mesh_to_triangles(mesh):
     v4 = [418444, 5653517, 300]
     triangles.append([v1, v2, v4])
     triangles.append([v1, v3, v2])
-    return triangles
+    '''
+    for triangle in triangles:
+        for point in triangle:
+            wgs84 = convert_crs(25832,4979,point)
+            itrs2000 = convert_crs(4979,4919,wgs84)
+            point = itrs2000
+    '''
+    
+    d = {'p1': [[1,2]]*len(triangles), 'p2': [[1,2]]*len(triangles), 'p3': [[1,2]]*len(triangles)}
+    #print(len(d[list(d.keys())[0]]))
+    df = pd.DataFrame(d)
+    
+    print(df.head())
+    
+    for i in range(0,len(triangles)):
+        df.at[i,'p1'] = triangles[i][0]
+        df.at[i,'p2'] = triangles[i][1]
+        df.at[i,'p3'] = triangles[i][2]
+        
+    print('p1 {}'.format(df['p1'][0]))
+    print('p2 {}'.format(df['p2'][0]))
+    print('p3 {}'.format(df['p3'][0]))    
+    transformer = Transformer.from_pipeline('''+proj=pipeline
+                                              +step +inv +proj=utm +zone=32 +ellps=GRS80
+                                              +step +proj=cart +ellps=GRS80''')
+    
+    df['p1'] = df['p1'].apply(lambda x: transformer.transform(x[0],x[1],x[2]))    
+    df['p2'] = df['p2'].apply(lambda x: transformer.transform(x[0],x[1],x[2]))
+    df['p3'] = df['p3'].apply(lambda x: transformer.transform(x[0],x[1],x[2]))
+    print('p1 {}'.format(df['p1'][0]))
+    print('p2 {}'.format(df['p2'][0]))
+    print('p3 {}'.format(df['p3'][0]))  
+    '''
+    transformer = Transformer.from_crs(4979, 4919, True)
+    df['p1'] = df['p1'].apply(lambda x: transformer.transform(x[0],x[1],x[2]))    
+    df['p2'] = df['p2'].apply(lambda x: transformer.transform(x[0],x[1],x[2]))
+    df['p3'] = df['p3'].apply(lambda x: transformer.transform(x[0],x[1],x[2]))
+    print('p1 {}'.format(df['p1'][0]))
+    print('p2 {}'.format(df['p2'][0]))
+    print('p3 {}'.format(df['p3'][0]))
+    '''
+    tri = []
+    for i in range(0,len(triangles)):
+        tri.append([df.at[i,'p1'],df.at[i,'p2'],df.at[i,'p3']])
+        
+    
+    return tri
 
 
 def sign_of_volume(a,b,c,d):
@@ -167,7 +220,6 @@ def sign_of_volume(a,b,c,d):
     return np.sign((1.0 / 6.0) * np.dot(np.cross(B, C), D))
 
 def test(line, triangles):
-    intersections = []
     q1 = line[0]
     q2 = line[1]
     for i in triangles:
@@ -181,18 +233,20 @@ def test(line, triangles):
 
 
 def main():
+    print(os.getcwd())
     #define input files
-    input_file = 'LoD2_32_418_5653_1_NW.obj'
-    height_model = 'dgm1_32_418_5653_1_nw.xyz'
+    input_file = '../data/LoD2_32_418_5653_1_NW.obj'
+    height_model = '../data/dgm1_32_418_5653_1_nw/dgm1_32_418_5653_1_nw.xyz'
     #define output file
     output_file = 'out.asc'
     #define cell size for grid
     cellsize_grid = 2
     #define test point
-    point = [418521.00, 5653473.00, 346.42]
+    point = convert_crs(32632,7930,[418521.00, 5653473.00, 346.42]) 
+    print(point)
 
     mesh = create_triangle_mesh(input_file)
-    visualize(mesh)
+    #visualize(mesh)
     ncols, nrows, lx, ly, array_centerpoints = create_grid(mesh, cellsize_grid)
 
     list_xyz = read_height_model(height_model)
@@ -215,13 +269,18 @@ def main():
 
     lines = satellite_lines(point)
     visible = []
-    i = 0
-    for line in lines:
-        if test(line, triangles) == True:
-            print("this line is blocked")
-        else:
-            print("this line is not blocked")
-            i += 1
+    j = 0
+    with open('../data/unblocked.obj','w') as unb:
+        for line in lines:
+            if test([line[2],line[0]], triangles) == True:
+                
+                print('{} is not blocked'.format(line[1]))
+                unb.write('v {} {} {}\n'.format(line[0][0],line[0][1],line[0][2]))
+                j += 1
+        unb.write('v {} {} {}\n'.format(point[0],point[1],point[2]))
+        for i in range(1,j+1):
+            unb.write('l {} {}\n'.format(j+1,i))
+            
     print("number of visible satellites = ", i)
     visible_list.append(i)
 
